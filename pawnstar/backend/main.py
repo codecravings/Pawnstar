@@ -6,13 +6,28 @@ import chess.engine
 import chess.pgn
 from io import StringIO
 from typing import List, Dict, Any, Optional
+import os
+import json
+import hashlib
+from datetime import datetime
+from dateutil import parser
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = FastAPI()
 
-STOCKFISH_PATH = r"C:\stockfish\stockfish.exe"
+# Configuration from environment
+STOCKFISH_PATH = os.getenv("STOCKFISH_PATH", r"C:\stockfish\stockfish.exe")
+CACHE_DIR = os.getenv("CACHE_DIR", "backend/cache")
+
+# Ensure cache directory exists
+os.makedirs(CACHE_DIR, exist_ok=True)
 
 class AnalysisRequest(BaseModel):
     username: str
+    source: str = "lichess"
     max: int = 10
     depth: int = 12
 
@@ -23,30 +38,255 @@ class MoveAnalysis(BaseModel):
     best_move: str
     evaluation: Dict[str, Any]
 
+class LatestGameResponse(BaseModel):
+    username: str
+    source: str
+    latest_hash: str
+    timestamp: str
+
+class GameReview(BaseModel):
+    top_blunders: List[Dict[str, Any]]
+    accuracy_estimate: float
+    weak_squares: List[str]
+    summary_text: str
+
+def get_cache_key(data: str) -> str:
+    """Generate SHA256 hash for caching."""
+    return hashlib.sha256(data.encode()).hexdigest()
+
+def get_latest_cache_path(source: str, username: str) -> str:
+    """Get path for latest game cache file."""
+    return os.path.join(CACHE_DIR, f"latest_{source}_{username}.txt")
+
+def get_analysis_cache_path(hash_key: str) -> str:
+    """Get path for analysis cache file."""
+    return os.path.join(CACHE_DIR, f"{hash_key}.json")
+
+async def fetch_lichess_latest(username: str) -> Dict[str, Any]:
+    """Fetch latest game metadata from Lichess."""
+    url = f"https://lichess.org/api/games/user/{username}"
+    headers = {"User-Agent": "PawnstarLocal/0.1"}
+    params = {"max": 1, "format": "pgn", "rated": "true"}
+    
+    response = requests.get(url, headers=headers, params=params)
+    response.raise_for_status()
+    
+    pgn_content = response.text.strip()
+    if not pgn_content:
+        raise HTTPException(status_code=404, detail="no public games found")
+    
+    # Parse PGN to get timestamp
+    pgn_io = StringIO(pgn_content)
+    game = chess.pgn.read_game(pgn_io)
+    if not game:
+        raise HTTPException(status_code=404, detail="no public games found")
+    
+    # Get timestamp from headers
+    timestamp = game.headers.get("UTCDate", "") + "T" + game.headers.get("UTCTime", "00:00:00") + "Z"
+    hash_key = get_cache_key(pgn_content)
+    
+    return {
+        "username": username,
+        "source": "lichess",
+        "latest_hash": hash_key,
+        "timestamp": timestamp
+    }
+
+async def fetch_chesscom_latest(username: str) -> Dict[str, Any]:
+    """Fetch latest game metadata from Chess.com."""
+    headers = {"User-Agent": "PawnstarLocal/0.1"}
+    
+    # Get user's archives
+    archives_url = f"https://api.chess.com/pub/player/{username}/games/archives"
+    response = requests.get(archives_url, headers=headers)
+    response.raise_for_status()
+    
+    archives = response.json().get("archives", [])
+    if not archives:
+        raise HTTPException(status_code=404, detail="no public games found")
+    
+    # Get latest month's games
+    latest_archive = archives[-1]
+    response = requests.get(latest_archive, headers=headers)
+    response.raise_for_status()
+    
+    games_data = response.json().get("games", [])
+    if not games_data:
+        raise HTTPException(status_code=404, detail="no public games found")
+    
+    # Get latest game
+    latest_game = games_data[-1]
+    game_id = str(latest_game.get("uuid", latest_game.get("url", "")))
+    end_time = latest_game.get("end_time", 0)
+    
+    # Convert timestamp to ISO format
+    timestamp = datetime.fromtimestamp(end_time).isoformat() + "Z"
+    hash_key = get_cache_key(game_id)
+    
+    return {
+        "username": username,
+        "source": "chess.com",
+        "latest_hash": hash_key,
+        "timestamp": timestamp
+    }
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
-@app.post("/analyze/lichess")
-async def analyze_lichess_games(request: AnalysisRequest) -> List[Dict[str, Any]]:
-    """
-    Analyze recent games from a Lichess user using Stockfish
-    """
+@app.get("/latest-game")
+async def get_latest_game(username: str, source: str = "lichess") -> LatestGameResponse:
+    """Get latest game metadata for a user."""
     try:
-        # Fetch recent games from Lichess API
-        lichess_url = f"https://lichess.org/api/games/user/{request.username}"
-        params = {
-            "max": request.max,
-            "format": "pgn",
-            "rated": "true"
-        }
+        # Check cache first
+        cache_path = get_latest_cache_path(source, username)
+        if os.path.exists(cache_path):
+            with open(cache_path, 'r') as f:
+                cached_data = json.load(f)
+                # Return cached data if it's less than 5 minutes old
+                cached_time = parser.parse(cached_data["timestamp"])
+                if (datetime.now() - cached_time.replace(tzinfo=None)).seconds < 300:
+                    return LatestGameResponse(**cached_data)
         
-        response = requests.get(lichess_url, params=params)
+        # Fetch fresh data
+        if source == "lichess":
+            data = await fetch_lichess_latest(username)
+        elif source == "chess.com":
+            data = await fetch_chesscom_latest(username)
+        else:
+            raise HTTPException(status_code=400, detail="unsupported source")
+        
+        # Cache the result
+        with open(cache_path, 'w') as f:
+            json.dump(data, f)
+        
+        return LatestGameResponse(**data)
+        
+    except requests.RequestException as e:
+        if hasattr(e, 'response') and e.response is not None:
+            if e.response.status_code in [429, 403]:
+                raise HTTPException(status_code=502, detail=f"Rate limited by {source}. Please try again in a few minutes.")
+            elif e.response.status_code == 404:
+                raise HTTPException(status_code=404, detail="no public games found")
+        raise HTTPException(status_code=502, detail=f"Failed to fetch from {source}: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+def generate_reviews(moves: List[Dict[str, Any]], game_data: Dict[str, Any]) -> GameReview:
+    """Generate game review with blunders, accuracy, and summary."""
+    blunders = []
+    total_moves = len(moves)
+    total_centipawn_loss = 0
+    
+    for i, move in enumerate(moves):
+        if move.get("evaluation") and move["evaluation"].get("type") == "cp":
+            current_eval = move["evaluation"]["value"]
+            
+            # Check if this is a blunder (significant eval drop)
+            if i > 0:
+                prev_move = moves[i-1]
+                if prev_move.get("evaluation") and prev_move["evaluation"].get("type") == "cp":
+                    prev_eval = prev_move["evaluation"]["value"]
+                    eval_swing = abs(current_eval - prev_eval)
+                    
+                    if eval_swing >= 150:
+                        blunders.append({
+                            "ply": move["ply"],
+                            "move": move["uci_move"],
+                            "eval_before": prev_eval,
+                            "eval_after": current_eval,
+                            "centipawn_loss": eval_swing
+                        })
+                        total_centipawn_loss += eval_swing
+    
+    # Calculate accuracy estimate (simplified)
+    accuracy = max(0, 100 - (total_centipawn_loss / max(total_moves, 1)) / 10)
+    
+    # Generate summary
+    blunder_count = len(blunders)
+    if blunder_count == 0:
+        summary = f"Excellent game! No major blunders detected. Accuracy: {accuracy:.1f}%"
+    elif blunder_count <= 2:
+        summary = f"Good game with {blunder_count} blunder(s). Accuracy: {accuracy:.1f}%"
+    else:
+        summary = f"Challenging game with {blunder_count} blunders. Accuracy: {accuracy:.1f}%"
+    
+    return GameReview(
+        top_blunders=sorted(blunders, key=lambda x: x["centipawn_loss"], reverse=True)[:5],
+        accuracy_estimate=round(accuracy, 1),
+        weak_squares=[],  # Would need deeper analysis
+        summary_text=summary
+    )
+
+async def fetch_games_for_analysis(username: str, source: str, max_games: int) -> str:
+    """Fetch games PGN for analysis."""
+    headers = {"User-Agent": "PawnstarLocal/0.1"}
+    
+    if source == "lichess":
+        url = f"https://lichess.org/api/games/user/{username}"
+        params = {"max": max_games, "format": "pgn", "rated": "true"}
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        return response.text
+        
+    elif source == "chess.com":
+        # For chess.com, we'll need to get PGN differently
+        # First get archives, then latest games
+        archives_url = f"https://api.chess.com/pub/player/{username}/games/archives"
+        response = requests.get(archives_url, headers=headers)
         response.raise_for_status()
         
-        games_pgn = response.text
+        archives = response.json().get("archives", [])
+        if not archives:
+            return ""
+            
+        # Get latest month's games
+        latest_archive = archives[-1]
+        response = requests.get(latest_archive, headers=headers)
+        response.raise_for_status()
+        
+        games_data = response.json().get("games", [])
+        if not games_data:
+            return ""
+            
+        # Take last N games and convert to PGN format
+        recent_games = games_data[-max_games:]
+        pgn_parts = []
+        
+        for game in recent_games:
+            # Convert chess.com game to PGN format
+            white = game.get("white", {}).get("username", "Unknown")
+            black = game.get("black", {}).get("username", "Unknown") 
+            result = game.get("result", "*")
+            pgn = game.get("pgn", "")
+            
+            if pgn:
+                pgn_parts.append(pgn)
+        
+        return "\n\n".join(pgn_parts)
+    
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported source")
+
+@app.post("/analyze")
+async def analyze_games(request: AnalysisRequest) -> Dict[str, Any]:
+    """
+    Analyze recent games from specified source using Stockfish with caching
+    """
+    try:
+        # Fetch games PGN
+        games_pgn = await fetch_games_for_analysis(request.username, request.source, request.max)
         if not games_pgn.strip():
             raise HTTPException(status_code=404, detail="No games found for user")
+        
+        # Check cache first
+        pgn_hash = get_cache_key(games_pgn)
+        cache_path = get_analysis_cache_path(pgn_hash)
+        
+        if os.path.exists(cache_path):
+            with open(cache_path, 'r') as f:
+                cached_result = json.load(f)
+                return cached_result
         
         # Parse PGN games
         games = []
@@ -72,6 +312,7 @@ async def analyze_lichess_games(request: AnalysisRequest) -> List[Dict[str, Any]
                     "white": game.headers.get("White", "Unknown"),
                     "black": game.headers.get("Black", "Unknown"),
                     "result": game.headers.get("Result", "*"),
+                    "source": request.source,
                     "moves": []
                 }
                 
@@ -112,16 +353,45 @@ async def analyze_lichess_games(request: AnalysisRequest) -> List[Dict[str, Any]
                     # Make the move
                     board.push(move)
                 
+                # Generate reviews for this game
+                review = generate_reviews(game_analysis["moves"], game_analysis)
+                game_analysis["review"] = review.dict()
+                
                 results.append(game_analysis)
         
-        return results
+        # Prepare final result
+        final_result = {
+            "games": results,
+            "username": request.username,
+            "source": request.source,
+            "analysis_hash": pgn_hash,
+            "analyzed_at": datetime.now().isoformat()
+        }
+        
+        # Cache the result
+        with open(cache_path, 'w') as f:
+            json.dump(final_result, f, indent=2)
+        
+        return final_result
         
     except requests.RequestException as e:
-        raise HTTPException(status_code=400, detail=f"Failed to fetch games from Lichess: {str(e)}")
+        if hasattr(e, 'response') and e.response is not None:
+            if e.response.status_code in [429, 403]:
+                raise HTTPException(status_code=502, detail=f"Rate limited by {request.source}. Please try again in a few minutes.")
+            elif e.response.status_code == 404:
+                raise HTTPException(status_code=404, detail="No games found for user")
+        raise HTTPException(status_code=502, detail=f"Failed to fetch games from {request.source}: {str(e)}")
     except chess.engine.EngineError as e:
         raise HTTPException(status_code=500, detail=f"Stockfish engine error: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+# Legacy endpoint for backward compatibility
+@app.post("/analyze/lichess")
+async def analyze_lichess_games(request: AnalysisRequest) -> Dict[str, Any]:
+    """Legacy endpoint - use /analyze instead"""
+    request.source = "lichess"
+    return await analyze_games(request)
 
 if __name__ == "__main__":
     import uvicorn
