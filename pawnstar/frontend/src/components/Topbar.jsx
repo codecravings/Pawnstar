@@ -1,15 +1,70 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 const Topbar = ({ onAnalyze, loading, darkMode, onToggleDarkMode }) => {
-  const [username, setUsername] = useState('');
-  const [source, setSource] = useState('lichess');
+  const [username, setUsername] = useState(() => localStorage.getItem('pawnstar_username') || '');
+  const [source, setSource] = useState(() => localStorage.getItem('pawnstar_source') || 'lichess');
+  const [autoWatch, setAutoWatch] = useState(false);
+  const [lastHash, setLastHash] = useState('');
+  const [toast, setToast] = useState('');
+  const debounceRef = useRef(null);
+  const pollIntervalRef = useRef(null);
+
+  const checkLatestGame = useCallback(async (user, src) => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/latest-game?username=${encodeURIComponent(user)}&source=${encodeURIComponent(src)}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (lastHash && data.latest_hash !== lastHash) {
+          // New game detected
+          setToast('New game found — analyzing...');
+          setTimeout(() => setToast(''), 3000);
+          onAnalyze(user, src);
+        }
+        setLastHash(data.latest_hash);
+      }
+    } catch (error) {
+      console.log('Failed to check latest game:', error);
+    }
+  }, [lastHash, onAnalyze]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (username.trim() && !loading) {
-      onAnalyze(username.trim());
+      onAnalyze(username.trim(), source);
     }
   };
+
+  // Auto-watch polling
+  useEffect(() => {
+    if (autoWatch && username.trim()) {
+      pollIntervalRef.current = setInterval(() => {
+        checkLatestGame(username.trim(), source);
+      }, 30000);
+    } else {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [autoWatch, username, source, checkLatestGame]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="bg-surface border-b border-gray-700 px-4 py-3">
@@ -20,17 +75,35 @@ const Topbar = ({ onAnalyze, loading, darkMode, onToggleDarkMode }) => {
           <form onSubmit={handleSubmit} className="flex items-center gap-2">
             <select 
               value={source}
-              onChange={(e) => setSource(e.target.value)}
+              onChange={(e) => {
+                setSource(e.target.value);
+                localStorage.setItem('pawnstar_source', e.target.value);
+              }}
               className="bg-bg border border-gray-600 rounded px-2 py-1 text-sm text-text focus:outline-none focus:border-primary"
             >
               <option value="lichess">Lichess</option>
+              <option value="chess.com">Chess.com</option>
             </select>
             
             <input
               type="text"
               placeholder="Username"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => {
+                const newUsername = e.target.value;
+                setUsername(newUsername);
+                localStorage.setItem('pawnstar_username', newUsername);
+                
+                // Debounce latest game check
+                if (debounceRef.current) {
+                  clearTimeout(debounceRef.current);
+                }
+                debounceRef.current = setTimeout(() => {
+                  if (newUsername.trim()) {
+                    checkLatestGame(newUsername.trim(), source);
+                  }
+                }, 500);
+              }}
               className="bg-bg border border-gray-600 rounded px-3 py-1 text-text placeholder-gray-400 focus:outline-none focus:border-primary"
               disabled={loading}
             />
@@ -49,8 +122,24 @@ const Topbar = ({ onAnalyze, loading, darkMode, onToggleDarkMode }) => {
                 'Analyze'
               )}
             </button>
+            
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={autoWatch}
+                onChange={(e) => setAutoWatch(e.target.checked)}
+                className="rounded"
+              />
+              <span className="text-text">Auto-watch</span>
+            </label>
           </form>
         </div>
+
+        {toast && (
+          <div className="fixed top-4 right-4 bg-accent text-black px-4 py-2 rounded-lg shadow-lg z-50">
+            {toast}
+          </div>
+        )}
 
         <button
           onClick={onToggleDarkMode}

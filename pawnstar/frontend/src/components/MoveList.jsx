@@ -1,6 +1,6 @@
 import React from 'react';
 
-const MoveList = ({ moves, currentIndex, onMoveSelect }) => {
+const MoveList = ({ moves, currentIndex, onMoveSelect, topBlunders = [] }) => {
   if (!moves || moves.length === 0) {
     return (
       <div className="text-gray-400 text-sm text-center py-4">
