@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: #0B0F14;
+  --color-surface: #0F1720;
+  --color-primary: #7C5CFF;
+  --color-accent: #22D3EE;
+  --color-danger: #FF6B6B;
+  --color-text: #E6EEF3;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+.chess-piece {
+  transition: transform 0.3s ease-in-out;
+}
+
+.chess-piece:hover {
+  transform: scale(1.05);
+}
+
+.blunder-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  box-shadow: 0 0 20px rgba(255, 107, 107, 0.6);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 20px rgba(255, 107, 107, 0.6);
+  }
+  50% {
+    opacity: .8;
+    box-shadow: 0 0 30px rgba(255, 107, 107, 0.8);
+  }
+}
+
+.eval-line {
+  stroke-dasharray: 100%;
+  stroke-dashoffset: 100%;
+  animation: draw 2s ease-in-out forwards;
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0%;
+  }
+}
