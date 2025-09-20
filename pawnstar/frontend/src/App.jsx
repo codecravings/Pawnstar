@@ -4,6 +4,7 @@ import Board from './components/Board';
 import MoveList from './components/MoveList';
 import EvalGraph from './components/EvalGraph';
 import MemeOverlay from './components/MemeOverlay';
+import GamesHistory from './components/GamesHistory';
 
 function App() {
   const [gameData, setGameData] = useState(null);
@@ -12,11 +13,15 @@ function App() {
   const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
   const [showMeme, setShowMeme] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
+  const [currentUsername, setCurrentUsername] = useState('');
+  const [currentSource, setCurrentSource] = useState('lichess');
 
   const handleAnalyze = async (username, source = 'lichess') => {
     setLoading(true);
     setError('');
     setGameData(null);
+    setCurrentUsername(username);
+    setCurrentSource(source);
     
     try {
       const response = await fetch('http://127.0.0.1:8000/analyze', {
@@ -147,6 +152,11 @@ function App() {
               </div>
             </div>
           )}
+          
+          <GamesHistory 
+            username={currentUsername}
+            source={currentSource}
+          />
         </div>
       </div>
 

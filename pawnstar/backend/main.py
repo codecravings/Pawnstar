@@ -60,6 +60,15 @@ class GameReview(BaseModel):
     weak_squares: List[str]
     summary_text: str
 
+class GameSummary(BaseModel):
+    white: str
+    black: str
+    result: str
+    date: str
+    time_control: str
+    opening: Optional[str] = None
+    url: Optional[str] = None
+
 def get_cache_key(data: str) -> str:
     """Generate SHA256 hash for caching."""
     return hashlib.sha256(data.encode()).hexdigest()
@@ -179,6 +188,99 @@ async def get_latest_game(username: str, source: str = "lichess") -> LatestGameR
             elif e.response.status_code == 404:
                 raise HTTPException(status_code=404, detail="no public games found")
         raise HTTPException(status_code=502, detail=f"Failed to fetch from {source}: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+@app.get("/games")
+async def get_user_games(username: str, source: str = "lichess", max_games: int = 20) -> List[GameSummary]:
+    """Get previous games for a user."""
+    try:
+        headers = {"User-Agent": "PawnstarLocal/0.1"}
+        
+        if source == "lichess":
+            url = f"https://lichess.org/api/games/user/{username}"
+            params = {"max": max_games, "format": "pgn", "rated": "true"}
+            response = requests.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            
+            games_pgn = response.text
+            if not games_pgn.strip():
+                return []
+            
+            games = []
+            pgn_io = StringIO(games_pgn)
+            
+            while True:
+                game = chess.pgn.read_game(pgn_io)
+                if game is None:
+                    break
+                    
+                # Extract game info
+                headers_dict = dict(game.headers)
+                date = headers_dict.get("UTCDate", "")
+                time = headers_dict.get("UTCTime", "")
+                
+                game_summary = GameSummary(
+                    white=headers_dict.get("White", "Unknown"),
+                    black=headers_dict.get("Black", "Unknown"),
+                    result=headers_dict.get("Result", "*"),
+                    date=f"{date} {time}" if date and time else date,
+                    time_control=headers_dict.get("TimeControl", "Unknown"),
+                    opening=headers_dict.get("Opening", None),
+                    url=headers_dict.get("Site", None)
+                )
+                games.append(game_summary)
+            
+            return games
+            
+        elif source == "chess.com":
+            # Get user's archives
+            archives_url = f"https://api.chess.com/pub/player/{username}/games/archives"
+            response = requests.get(archives_url, headers=headers)
+            response.raise_for_status()
+            
+            archives = response.json().get("archives", [])
+            if not archives:
+                return []
+            
+            # Get latest month's games
+            latest_archive = archives[-1]
+            response = requests.get(latest_archive, headers=headers)
+            response.raise_for_status()
+            
+            games_data = response.json().get("games", [])
+            if not games_data:
+                return []
+            
+            games = []
+            for game_data in games_data[-max_games:]:
+                white_info = game_data.get("white", {})
+                black_info = game_data.get("black", {})
+                end_time = game_data.get("end_time", 0)
+                
+                game_summary = GameSummary(
+                    white=white_info.get("username", "Unknown"),
+                    black=black_info.get("username", "Unknown"),
+                    result=game_data.get("result", "*"),
+                    date=datetime.fromtimestamp(end_time).isoformat() if end_time else "",
+                    time_control=game_data.get("time_class", "Unknown"),
+                    opening=None,
+                    url=game_data.get("url", None)
+                )
+                games.append(game_summary)
+            
+            return games
+        
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported source")
+            
+    except requests.RequestException as e:
+        if hasattr(e, 'response') and e.response is not None:
+            if e.response.status_code in [429, 403]:
+                raise HTTPException(status_code=502, detail=f"Rate limited by {source}. Please try again in a few minutes.")
+            elif e.response.status_code == 404:
+                raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=502, detail=f"Failed to fetch games from {source}: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
@@ -365,7 +467,7 @@ async def analyze_games(request: AnalysisRequest) -> Dict[str, Any]:
                 
                 # Generate reviews for this game
                 review = generate_reviews(game_analysis["moves"], game_analysis)
-                game_analysis["review"] = review.dict()
+                game_analysis["review"] = review.model_dump()
                 
                 results.append(game_analysis)
         

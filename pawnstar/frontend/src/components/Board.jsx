@@ -26,12 +26,9 @@ const Board = ({ fen, moves, currentMoveIndex }) => {
 
   const board = parseFen(fen);
 
-  const getPieceSymbol = (piece) => {
-    const symbols = {
-      'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
-      'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
-    };
-    return symbols[piece] || '';
+  const getPieceImage = (piece) => {
+    if (!piece) return null;
+    return `/pieces/${piece}.svg`;
   };
 
   const isLightSquare = (row, col) => (row + col) % 2 === 0;
@@ -54,13 +51,12 @@ const Board = ({ fen, moves, currentMoveIndex }) => {
                 `}
               >
                 {piece && (
-                  <span 
-                    className={`chess-piece select-none ${
-                      piece === piece.toUpperCase() ? 'text-gray-100' : 'text-gray-900'
-                    }`}
-                  >
-                    {getPieceSymbol(piece)}
-                  </span>
+                  <img 
+                    src={getPieceImage(piece)}
+                    alt={piece}
+                    className="chess-piece w-8 h-8 sm:w-12 sm:h-12 object-contain select-none transition-transform duration-200 hover:scale-110"
+                    draggable={false}
+                  />
                 )}
               </div>
             ))
