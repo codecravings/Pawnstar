@@ -43,9 +43,9 @@ function App() {
         // Check for blunders and show meme overlay
         const moves = data[0].moves || [];
         const hasBlunder = moves.some(move => {
-          const eval = move.evaluation;
-          if (eval && eval.type === 'cp') {
-            return Math.abs(eval.value) >= 150;
+          const evaluation = move.evaluation;
+          if (evaluation && evaluation.type === 'cp') {
+            return Math.abs(evaluation.value) >= 150;
           }
           return false;
         });
