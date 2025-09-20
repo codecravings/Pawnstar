@@ -1,0 +1,1 @@
+Source: Lichess public assets (lichess-org/lila). Files taken from https://github.com/lichess-org/lila (public repo).
