@@ -1,0 +1,57 @@
+You are an expert full-stack engineer with shell access in the current local Git repo root (Pawnstar). 
+Do NOT mention yourself or assistant identity in any created files, commits, or messages.
+Proceed step-by-step and print a short status line after each major step.
+
+GOAL: Add chess.com support + reviews (already described), add caching, .env usage, and enable frontend auto-fetch behavior:
+- frontend will debounce username input (500ms) and call GET /latest-game
+- frontend will offer Auto-watch toggle that polls /latest-game every 30s and triggers full analysis when new game found
+
+TASKS:
+
+1) Create/modify backend:
+   - Ensure backend/.env is read using python-dotenv. Add backend/.env.example with:
+       STOCKFISH_PATH=C:\stockfish\stockfish.exe
+       CACHE_DIR=backend/cache
+   - Update backend/requirements.txt to include: python-dotenv, python-dateutil
+   - Implement a new endpoint:
+       GET /latest-game?username={username}&source={lichess|chess.com}
+     Behavior:
+       - Fetch only metadata (for lichess: use API to stream recent games and take first game's pgn hash / createdAt; for chess.com: call archives, fetch latest month, inspect first game)
+       - Return JSON: { "username": "...", "source": "...", "latest_hash": "<sha256-of-pgn-or-id>", "timestamp": "<ISO8601>" }
+       - If no games found -> return 404 with {"detail":"no public games found"}
+       - Use header User-Agent: PawnstarLocal/0.1
+       - Cache the latest_hash per username+source in backend/cache/latest_{source}_{username}.txt to avoid re-fetching too often
+   - Add caching behavior on existing /analyze: before analyzing a PGN, compute sha256(pgn). If backend/cache/{sha}.json exists, return it. Otherwise run analysis and save JSON to that file.
+   - Implement reviews generation as earlier: top_blunders (delta vs best), accuracy_estimate, weak_squares, summary_text.
+   - Keep Stockfish path from .env or fallback to r"C:\stockfish\stockfish.exe".
+   - Commit changes as: "Backend: add /latest-game, caching, and reviews (chess.com+lichess)"
+
+2) Modify frontend:
+   - Update frontend/src/components/Topbar.jsx or create it if missing:
+     * Add source dropdown (lichess/chess.com)
+     * Username input with debounce 500ms: on stable input call GET /latest-game?username=...&source=...
+     * If /latest-game returns a latest_hash different than last seen, auto-trigger POST /analyze with {username, source, max:1, depth:12}
+     * Add "Auto-watch" toggle: when enabled start polling GET /latest-game every 30s; when new_hash appears trigger analyze and show toast "New game found — analyzing..."
+     * Add loading states & disable analyze button during network activity
+   - Ensure MoveList supports highlighting top_blunders returned in reviews
+   - Add small CSS/UX: spinner on analyze button, toast area near top-right, and remember last username+source in localStorage
+
+   - Commit changes as: "Frontend: add debounce, auto-watch polling, loading & toast"
+
+3) Add backend/.gitignore entry for cache files (backend/cache/*) and ensure cache dir created by backend on startup if missing.
+
+4) Create new branch feat/chesscom, add/commit, and push to origin. Print commit SHAs and push URL.
+
+OUTPUT:
+- After each step print "STEP X: done" or "STEP X: failed - <reason>"
+- At end print list of modified/created files, commit SHAs, and push URL.
+- Print one-line instructions how to test:
+   1) set .env or copy .env.example
+   2) start backend
+   3) open frontend, type username, enable Auto-watch if desired
+
+ERROR HANDLING:
+- If chess.com/lichess returns 429/403/404, return 502 with clear message and suggest retry interval.
+- If any network operation requires credentials (unlikely), print exact command to run locally and continue.
+
+Proceed now and print progress as you go.
