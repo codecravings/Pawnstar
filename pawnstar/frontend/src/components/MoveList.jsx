@@ -9,22 +9,27 @@ const MoveList = ({ moves, currentIndex, onMoveSelect, topBlunders = [] }) => {
     );
   }
 
-  const getEvalBadge = (evaluation, prevEvaluation) => {
-    if (!evaluation || evaluation.type !== 'cp') return null;
+  const getQualityBadge = (move) => {
+    if (!move.quality) return null;
     
-    const currentEval = evaluation.value;
-    const prevEval = prevEvaluation && prevEvaluation.type === 'cp' ? prevEvaluation.value : 0;
-    const swing = Math.abs(currentEval - prevEval);
+    const quality = move.quality;
+    const colors = {
+      brilliant: 'bg-gradient-to-r from-yellow-400 to-orange-500 text-black',
+      best: 'bg-gradient-to-r from-blue-500 to-purple-600 text-white',
+      excellent: 'bg-green-500 text-white',
+      good: 'bg-green-400 text-white',
+      ok: 'bg-gray-500 text-white',
+      inaccuracy: 'bg-yellow-500 text-black',
+      mistake: 'bg-orange-500 text-white',
+      blunder: 'bg-red-600 text-white',
+      catastrophe: 'bg-gradient-to-r from-red-600 to-black text-white animate-pulse'
+    };
     
-    if (Math.abs(currentEval) >= 150 || swing >= 150) {
-      return <span className="text-xs bg-danger px-1 py-0.5 rounded text-white ml-2">Blunder</span>;
-    } else if (swing >= 100) {
-      return <span className="text-xs bg-orange-500 px-1 py-0.5 rounded text-white ml-2">Mistake</span>;
-    } else if (swing >= 50) {
-      return <span className="text-xs bg-yellow-500 px-1 py-0.5 rounded text-black ml-2">Inaccuracy</span>;
-    }
-    
-    return null;
+    return (
+      <span className={`text-xs px-1 py-0.5 rounded ml-2 ${colors[quality.category] || 'bg-gray-500 text-white'}`}>
+        {quality.emoji} {quality.category.toUpperCase()}
+      </span>
+    );
   };
 
   const formatEval = (evaluation) => {
@@ -43,9 +48,7 @@ const MoveList = ({ moves, currentIndex, onMoveSelect, topBlunders = [] }) => {
     <div className="max-h-64 overflow-y-auto space-y-1">
       {moves.map((move, index) => {
         const isSelected = index === currentIndex;
-        const isBlunder = move.evaluation && move.evaluation.type === 'cp' && Math.abs(move.evaluation.value) >= 150;
-        const prevMove = index > 0 ? moves[index - 1] : null;
-        const badge = getEvalBadge(move.evaluation, prevMove?.evaluation);
+        const qualityBadge = getQualityBadge(move);
         
         return (
           <div
@@ -57,15 +60,15 @@ const MoveList = ({ moves, currentIndex, onMoveSelect, topBlunders = [] }) => {
                 ? 'bg-primary text-white' 
                 : 'bg-bg hover:bg-gray-700'
               }
-              ${isBlunder && !isSelected ? 'blunder-pulse' : ''}
             `}
+            title={move.quality ? move.quality.description : ''}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <span className="font-mono text-sm">
                   {Math.floor(move.ply / 2) + 1}{move.ply % 2 === 1 ? '.' : '...'} {move.uci_move}
                 </span>
-                {badge}
+                {qualityBadge}
               </div>
               
               <div className="text-xs">
@@ -82,6 +85,12 @@ const MoveList = ({ moves, currentIndex, onMoveSelect, topBlunders = [] }) => {
             {move.best_move && move.best_move !== move.uci_move && (
               <div className="text-xs text-gray-400 mt-1">
                 Best: {move.best_move}
+              </div>
+            )}
+            
+            {move.quality && (
+              <div className="text-xs text-gray-300 mt-1 italic">
+                {move.quality.description}
               </div>
             )}
           </div>

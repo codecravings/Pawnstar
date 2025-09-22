@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const GamesHistory = ({ username, source }) => {
+const GamesHistory = ({ username, source, onAnalyzeGame }) => {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -83,14 +83,16 @@ const GamesHistory = ({ username, source }) => {
   }
 
   return (
-    <div className="bg-surface rounded-lg p-4">
+    <div className="bg-gradient-to-br from-surface to-gray-800 rounded-xl p-5 shadow-lg border border-gray-600">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-primary">Recent Games</h3>
+        <h3 className="text-xl font-bold text-accent flex items-center">
+          🕒 Recent Games
+        </h3>
         <button 
           onClick={fetchGames}
-          className="text-sm text-accent hover:text-accent-light transition-colors"
+          className="text-sm text-accent hover:text-accent-light transition-colors px-3 py-1 bg-background rounded-lg hover:bg-gray-700"
         >
-          Refresh
+          🔄 Refresh
         </button>
       </div>
       
@@ -99,9 +101,9 @@ const GamesHistory = ({ username, source }) => {
           No games found
         </div>
       ) : (
-        <div className="space-y-2 max-h-96 overflow-y-auto">
+        <div className="space-y-3 max-h-96 overflow-y-auto">
           {games.map((game, index) => (
-            <div key={index} className="bg-background rounded p-3 hover:bg-opacity-80 transition-colors">
+            <div key={index} className="bg-gradient-to-r from-background to-gray-800 rounded-lg p-4 hover:from-gray-700 hover:to-gray-600 transition-all duration-200 border border-gray-600 shadow-md">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-2 text-sm">
@@ -121,16 +123,27 @@ const GamesHistory = ({ username, source }) => {
                   <div className={`text-sm font-medium ${getResultColor(game.result, game.white, game.black, username)}`}>
                     {getResultText(game.result)}
                   </div>
-                  {game.url && (
-                    <a 
-                      href={game.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-xs text-accent hover:text-accent-light transition-colors"
+                  <div className="flex flex-col space-y-1 mt-1">
+                    {game.url && (
+                      <a 
+                        href={game.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-xs text-accent hover:text-accent-light transition-colors"
+                      >
+                        View Game
+                      </a>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAnalyzeGame && onAnalyzeGame(game);
+                      }}
+                      className="text-xs text-green-400 hover:text-green-300 transition-colors"
                     >
-                      View Game
-                    </a>
-                  )}
+                      🔍 Analyze
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

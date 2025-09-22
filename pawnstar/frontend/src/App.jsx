@@ -5,6 +5,9 @@ import MoveList from './components/MoveList';
 import EvalGraph from './components/EvalGraph';
 import MemeOverlay from './components/MemeOverlay';
 import GamesHistory from './components/GamesHistory';
+import LoadingScreen from './components/LoadingScreen';
+import PlayerComparison from './components/PlayerComparison';
+import TabbedSidebar from './components/TabbedSidebar';
 
 function App() {
   const [gameData, setGameData] = useState(null);
@@ -15,15 +18,64 @@ function App() {
   const [darkMode, setDarkMode] = useState(true);
   const [currentUsername, setCurrentUsername] = useState('');
   const [currentSource, setCurrentSource] = useState('lichess');
+  const [loadingMessage, setLoadingMessage] = useState('Analyzing your game...');
+
+  const analyzeSpecificGame = async (gameInfo) => {
+    setLoading(true);
+    setLoadingMessage('🎯 Fetching individual game...');
+    setError('');
+    setGameData(null);
+    setCurrentMoveIndex(0);
+    
+    try {
+      const gameUrl = gameInfo.url;
+      if (!gameUrl) {
+        throw new Error('Game URL not available for analysis');
+      }
+      
+      setLoadingMessage('🧠 Deep analyzing with Stockfish...');
+      
+      // Use the new analyze-game endpoint
+      const response = await fetch('http://127.0.0.1:8000/analyze-game', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          game_url: gameUrl
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `Analysis failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.games && data.games.length > 0) {
+        setGameData(data.games[0]);
+        setCurrentMoveIndex(0);
+      } else {
+        throw new Error('No game data received');
+      }
+    } catch (err) {
+      setError(`Failed to analyze game: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAnalyze = async (username, source = 'lichess') => {
     setLoading(true);
+    setLoadingMessage('🔍 Fetching latest games...');
     setError('');
     setGameData(null);
     setCurrentUsername(username);
     setCurrentSource(source);
     
     try {
+      setLoadingMessage('🧠 Running deep Stockfish analysis...');
+      
       const response = await fetch('http://127.0.0.1:8000/analyze', {
         method: 'POST',
         headers: {
@@ -109,9 +161,9 @@ function App() {
         </div>
       )}
 
-      <div className="flex flex-col lg:flex-row min-h-[calc(100vh-4rem)]">
+      <div className="flex flex-col xl:flex-row min-h-[calc(100vh-4rem)] gap-6 p-4">
         {/* Board Column */}
-        <div className="flex-1 p-4">
+        <div className="flex-1 flex justify-center items-start">
           <Board 
             fen={currentFen}
             moves={gameData?.moves || []}
@@ -120,47 +172,27 @@ function App() {
         </div>
 
         {/* Sidebar */}
-        <div className="w-full lg:w-96 p-4 space-y-4">
-          <div className="bg-surface rounded-lg p-4">
-            <h3 className="text-lg font-semibold mb-3 text-accent">Evaluation</h3>
-            <EvalGraph values={evalValues} />
-          </div>
-          
-          <div className="bg-surface rounded-lg p-4">
-            <h3 className="text-lg font-semibold mb-3 text-accent">Moves</h3>
-            <MoveList 
-              moves={gameData?.moves || []}
-              currentIndex={currentMoveIndex}
-              onMoveSelect={setCurrentMoveIndex}
-              topBlunders={gameData?.review?.top_blunders || []}
-            />
-          </div>
-          
-          {gameData?.review && (
-            <div className="bg-surface rounded-lg p-4">
-              <h3 className="text-lg font-semibold mb-3 text-accent">Analysis</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span>Accuracy:</span>
-                  <span className="font-semibold text-accent">{gameData.review.accuracy_estimate}%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Blunders:</span>
-                  <span className="font-semibold text-danger">{gameData.review.top_blunders.length}</span>
-                </div>
-                <p className="mt-3 text-gray-300">{gameData.review.summary_text}</p>
-              </div>
-            </div>
+        <div className="w-full xl:w-96 space-y-6">
+          {/* Player Comparison - New Component */}
+          {gameData?.player_reviews && (
+            <PlayerComparison gameData={gameData} />
           )}
           
-          <GamesHistory 
-            username={currentUsername}
-            source={currentSource}
+          {/* Tabbed Interface */}
+          <TabbedSidebar 
+            gameData={gameData}
+            evalValues={evalValues}
+            currentMoveIndex={currentMoveIndex}
+            onMoveSelect={setCurrentMoveIndex}
+            currentUsername={currentUsername}
+            currentSource={currentSource}
+            onAnalyzeGame={analyzeSpecificGame}
           />
         </div>
       </div>
 
       {showMeme && <MemeOverlay />}
+      {loading && <LoadingScreen message={loadingMessage} />}
     </div>
   );
 }
