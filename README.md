@@ -190,9 +190,6 @@ This application may cause:
 
 **Use responsibly.** Side effects may include chess improvement.
 
-## 📜 License
-
-MIT License - Because sharing chess pain should be free for everyone.
 
 ## 🙏 Acknowledgments
 
