@@ -151,38 +151,7 @@ async def fetch_chesscom_latest(username: str) -> Dict[str, Any]:
         "latest_hash": hash_key,
         "timestamp": timestamp
     }
- hive_flutter: ^1.1.0
-  path_provider: ^2.1.1
-  image_picker: ^1.0.4
-  file_picker: ^8.0.0
-  permission_handler: ^11.0.1
-  provider: ^6.1.1
-  fl_chart: ^0.65.0
-  google_fonts: ^6.1.0
-  flutter_animate: ^4.3.0
-  uuid: ^4.2.1
-  intl: ^0.18.1
-  shared_preferences: ^2.2.2
-  flutter_local_notifications: ^17.0.0
-  google_mobile_ads: ^4.0.0
-  video_player: ^2.8.2
-  in_app_purchase: ^3.1.13
 
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^3.0.1
-  hive_generator: ^2.0.1
-  build_runner: ^2.4.7
-
-flutter:
-  uses-material-design: true
-  assets:
-    - assets/images/
-    - assets/icons/
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
 
 @app.get("/latest-game")
 async def get_latest_game(username: str, source: str = "lichess") -> LatestGameResponse:
@@ -345,7 +314,7 @@ def summarize_tactical_patterns(patterns: List) -> Dict[str, Any]:
     
     summary["severity_breakdown"] = severity_counts
     
-    # Generate human-readable summary
+    # Generate human readable summarys
     if len(patterns) == 1:
         summary["text"] = f"{patterns[0].emoji} {patterns[0].name}: {patterns[0].description}"
     else:
