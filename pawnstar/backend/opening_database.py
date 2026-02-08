@@ -157,16 +157,34 @@ class OpeningDatabase:
     def identify_opening(self, moves: list) -> Optional[Dict]:
         """Identify the opening from a list of moves"""
         board = chess.Board()
-        E/FilePhenotypeFlags(17667): Config package com.google.android.gms.clearcut_client#com.basbc.app cannot use FILE backing without declarative registration. See go/phenotype-android-integration#phenotype for more information. This will lead to stale flags.
-E/FilePhenotypeFlags(17667): Config package com.google.android.gms.clearcut_client#com.basbc.app cannot use FILE backing without declarative registration. See go/phenotype-android-integration#phenotype for more information. This will lead to stale flags.
-E/FilePhenotypeFlags(17667): Config package com.google.android.gms.clearcut_client#com.basbc.app cannot use FILE backing without declarative registration. See go/phenotype-android-integration#phenotype for more information. This will lead to stale flags.
-D/BufferPoolAccessor2.0(17667): bufferpool2 0xb4000074bc249428 : 5(40960 size) total buffers - 0(0 size) used buffers - 22/27 (recycle/alloc) - 5/27 (fetch/transfer)
-D/BufferPoolAccessor2.0(17667): evictor expired: 1, evicted: 1
-D/CompatibilityChangeReporter(17667): Compat change id reported: 150939131; UID 10399; state: ENABLED
-E/BLASTBufferQueue(17667): Cannot find perfservice
-E/qdgralloc(17667): GetGpuPixelFormat: No map for format: 0x38
-E/AdrenoUtils(17667): <validate_memory_layout_input_parmas:1984>: Unknown Format 0
-E/AdrenoUtils(17667): <adreno_init_memory_layout:4723>: Memory Layout input parameter validation failed!
+        # Play moves and check for opening matches
+        for i, move in enumerate(moves):
+            if i >= 10:  # Only check first 10 moves for opening
+                break
+                
+            try:
+                # Convert move notation to chess move
+                if isinstance(move, str):
+                    chess_move = board.parse_san(move)
+                else:
+                    # If it's a dict with uci_move
+                    uci_move = move.get('uci_move', str(move))
+                    chess_move = chess.Move.from_uci(uci_move)
+                
+                board.push(chess_move)
+                
+                # Check if current position matches any opening
+                fen = board.fen()
+                if fen in self.openings:
+                    opening = self.openings[fen].copy()
+                    opening['moves_played'] = i + 1
+                    opening['position_fen'] = fen
+                    return opening
+                    
+            except (ValueError, chess.InvalidMoveError):
+                continue
+        
+        return None
 
 
     
