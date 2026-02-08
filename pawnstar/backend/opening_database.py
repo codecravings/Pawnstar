@@ -7,8 +7,19 @@ import chess.pgn
 from typing import Dict, Optional, Tuple
 
 class OpeningDatabase:
-    def __init__(self):
-        # ECO opening database - basic openings for now
+    def __init__(self):N
+V/ImeFocusController(17667): Restarting due to isRestartOnNextWindowFocus as true
+D/ImeFocusController(17667): onViewFocusChanged, view=DecorView@f273d94[MainActivity], mServedView=null
+V/ImeFocusController(17667): checkFocus: view=null next=DecorView@f273d94[MainActivity] immDelegate=delegate{6517dfb displayId=0} force=true package=<none>
+Lost connection to device.
+[og@archlinux Stop meh]$ flutter run
+No supported devices connected.
+
+The following devices were found, but are not supported by this project:
+Linux (desktop) • linux • linux-x64 • Arch Linux 6.18.3-arch1-1
+If you would like your app to run on linux, consider running `flutter
+create .` to generate projects for these p
+        
         self.openings = {
             # King's Pawn Openings (C00-C99)
             "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1": {
