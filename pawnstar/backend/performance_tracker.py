@@ -9,7 +9,25 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
 import sqlite3
 from pathlib import Path
-
+      583 -                        setTextColor(Color.parseColor
+          -("#B3FFFFFF"))                                       
+      584 -                        gravity = Gravity.CENTER     
+      585 -                        layoutParams = LinearLayout.L
+          -ayoutParams(                                         
+      586 -                            LinearLayout.LayoutParams
+          -.MATCH_PARENT,                                       
+      587 -                            LinearLayout.LayoutParams
+          -.WRAP_CONTENT                                        
+      588 -                        ).apply {                    
+      589 -                            setMargins(0, dpToPx(32),
+          - 0, 0)                                               
+      590 -                        }                            
+      591 -                    }                                
+      592 -                    addView(countdownText)           
+      593 -                                                     
+      594 -                    val dismissButton = createDismiss
+          -Button(primaryColor).apply {                         
+      595 -                        visibility = View.GONE   
 @dataclass
 class GamePerformance:
     username: str
