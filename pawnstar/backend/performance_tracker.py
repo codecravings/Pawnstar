@@ -49,13 +49,7 @@ class PerformanceTracker:
         self.db_path = db_path
         self._init_database()
     
-      590 -                        }                            
-      591 -                    }                                
-      592 -                    addView(countdownText)           
-      593 -                                                     
-      594 -                    val dismissButton = createDismiss
-          -Button(primaryColor).apply {                         
-      595 -                        visibility = View.GONE   
+
     def _init_database(self):
         """Initialize SQLite database for performance tracking"""
         # Ensure directory exists
@@ -104,7 +98,7 @@ class PerformanceTracker:
             )
         ''')
         
-        # Create indices for better performance
+        # Creating indices for better performance
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_username ON games (username)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_game_date ON games (game_date)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_opening_eco ON games (opening_eco)')
